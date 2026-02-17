@@ -1,128 +1,37 @@
-import re
-import openai
+from pydantic import BaseModel
+from openai import OpenAI
 import os
 from dotenv import load_dotenv
-import json
-
-# Load environment variables from .env file
 load_dotenv()
 
-# Get the OpenAI API key from environment variables
-openai_api_key = os.getenv("OPENAI_API_KEY")
+openai_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=openai_key)
 
-client = openai.OpenAI(api_key=openai_api_key)
+class JobAnalysis(BaseModel):
+    title: str
+    company: str
+    required_skills: list[str]
+    preferred_skills: list[str]
+    yoe_range: str
+    salary_range: str
+    remote_policy: str
+    match_percentage: float
+    missing_skills: list[str]
 
-def extract_job_details(job_description) -> dict:
-    prompt = f"""
-    Extract the following details from the job description:
-    1. Job Title
-    2. Company Name
-    3. Location
-    4. Required Skills
-    5. Experience Level
-
-    Job Description: {job_description}
-
-    Please provide the details in JSON format.
-    """
-
-    response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+def compare_skills(job_description: str, resume: str) -> JobAnalysis:
+    response = client.beta.chat.completions.parse(
+        model="gpt-4o-mini",
         messages=[
-            {"role": "system", "content": "You are a helpful assistant that extracts job details from job descriptions."},
-            {"role": "user", "content": prompt}
+            {"role": "system", "content": "Extract job posting data. For title, use the exact job title only — no extra words. missing_skills should ONLY contain items from required_skills and preferred_skills that the candidate lacks. Do not invent new skills."},
+            {"role": "user", "content": f"Job Description:\n{job_description}\n\nResume:\n{resume}"}
         ],
-        max_tokens=500,
-        temperature=0.2,
-        response_format={"type": "json_object"},
+        response_format=JobAnalysis,
+        temperature=0
     )
-
-    content = response.choices[0].message.content.strip()
-    try:
-        # Try direct JSON parsing first
-        return json.loads(content)
-    except json.JSONDecodeError:
-        # Try to extract JSON from the response using regex
-        match = re.search(r"\{.*\}", content, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group())
-            except json.JSONDecodeError:
-                pass
-        print("Failed to parse JSON response. Raw response:")
-        print(content)
-        return {}
-    
-def compare_skills(job_description, candidate_skills):
-    details = extract_job_details(job_description)
-    required_skills = set(details.get("Required Skills", []))
-    candidate_skills_set = set(candidate_skills)
-
-    missing_skills = required_skills - candidate_skills_set
-    matched_skills = required_skills & candidate_skills_set
-
-    return {
-        "matched_skills": list(matched_skills),
-        "missing_skills": list(missing_skills)
-    }
-
-def extract_skills_from_resume(resume_text):
-    prompt = f"""
-    Extract the skills from the following resume text and return them in JSON format with a "skills" key containing an array of skills.
-
-    Resume Text: {resume_text}
-
-    Return format example:
-    {{"skills": ["Python", "SQL", "Machine Learning", ...]}}
-    """
-
-    response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant that extracts skills from resumes."},
-            {"role": "user", "content": prompt}
-        ],
-        max_tokens=500,
-        temperature=0.2,
-        response_format={"type": "json_object"}
-    )
-
-    content = response.choices[0].message.content.strip()
-    try:
-        print("Raw response for skills extraction:")
-        print(content)
-        result = json.loads(content)
-        # Return the list of skills, not the whole dict
-        return result.get("skills", [])
-    except json.JSONDecodeError:
-        # Try to extract JSON from the response using regex
-        match = re.search(r"\{.*\}", content, re.DOTALL)
-        if match:
-            try:
-                result = json.loads(match.group())
-                return result.get("skills", [])
-            except json.JSONDecodeError:
-                pass
-        print("Failed to parse JSON response. Raw response:")
-        print(content)
-        return []
-def analyze_my_resume(resume_text, job_description):
-    # Extract skills from the resume (returns a list)
-    resume_skills = extract_skills_from_resume(resume_text)
-
-    # Compare resume skills with job description requirements
-    comparison = compare_skills(job_description, resume_skills)
-
-    return {
-        "resume_skills": resume_skills,
-        "matched_skills": comparison["matched_skills"],
-        "missing_skills": comparison["missing_skills"]
-    } 
-
-# Example usage
-if __name__ == "__main__":
-    job_description = """
-    About the job
+    return response.choices[0].message.parsed
+def main():
+    job_description = '''
+About the job
 Who We Are
 
 Verkada is transforming how organizations protect their people and places with an integrated, AI-powered platform. A leader in cloud physical security, Verkada helps organizations strengthen safety and efficiency through one connected software platform that includes solutions for video security, access control, air quality sensors, alarms, intercoms, and visitor management.
@@ -193,11 +102,9 @@ $130,000—$180,000 USD
 
 Verkada Is An Equal Opportunity Employer
 
-As an equal opportunity employer, Verkada is committed to providing employment opportunities to all individuals. All applicants for positions at Verkada will be treated without regard to race, color, ethnicity, religion, sex, gender, gender identity and expression, sexual orientation, national origin, disability, age, marital status, veteran status, pregnancy, or any other basis prohibited by applicable law.
-    """
-
-    resume_text= """
-    SUMMARY
+As an equal opportunity employer, Verkada is committed to providing employment opportunities to all individuals. All applicants for positions at Verkada will be treated without regard to race, color, ethnicity, religion, sex, gender, gender identity and expression, sexual orientation, national origin, disability, age, marital status, veteran status, pregnancy, or any other basis prohibited by applicable law.'''
+    resume = '''
+SUMMARY
 Manidweep Sharma 
 Mankato, MN |manidweepsharmay@gmail.com| +1 (507)-613-1138 | LinkedIn | Portfolio 
 • Data Engineer with 4+ years of experience in cloud-native data architectures, ETL pipeline development, 
@@ -297,26 +204,10 @@ Jan 2023 – Dec 2024
 Aug 2016 – Oct 2020 
 President, Student Association of India       
 Aug 2023 – May 2024 
-Member, DREAM (Data Resources for Eager & Analytical Minds) 
+Member, DREAM (Data Resources for Eager & Analytical Minds) '''
 
+    analysis = compare_skills(job_description, resume)
+    print(analysis)
 
-    """
-    analysis_result = analyze_my_resume(resume_text, job_description)
-    print("\n" + "="*60)
-    print("RESUME ANALYSIS RESULT")
-    print("="*60)
-    print(f"\nResume Skills Found ({len(analysis_result['resume_skills'])}):")
-    for skill in analysis_result['resume_skills']:
-        print(f"  • {skill}")
-
-    print(f"\nMatched Skills ({len(analysis_result['matched_skills'])}):")
-    for skill in analysis_result['matched_skills']:
-        print(f"  ✓ {skill}")
-
-    print(f"\nMissing Skills ({len(analysis_result['missing_skills'])}):")
-    for skill in analysis_result['missing_skills']:
-        print(f"  ✗ {skill}")
-
-    print("\n" + "="*60)
-    print(f"Match Rate: {len(analysis_result['matched_skills'])}/{len(analysis_result['matched_skills']) + len(analysis_result['missing_skills'])} ({len(analysis_result['matched_skills']) / (len(analysis_result['matched_skills']) + len(analysis_result['missing_skills'])) * 100:.1f}%)")
-    print("="*60)
+if __name__ == "__main__":
+    main()
