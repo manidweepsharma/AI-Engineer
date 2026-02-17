@@ -34,6 +34,7 @@ def extract_job_details(job_description) -> dict:
         ],
         max_tokens=500,
         temperature=0.2,
+        response_format={"type": "json_object"},
     )
 
     content = response.choices[0].message.content.strip()
@@ -67,11 +68,12 @@ def compare_skills(job_description, candidate_skills):
 
 def extract_skills_from_resume(resume_text):
     prompt = f"""
-    Extract the skills from the following resume text:
+    Extract the skills from the following resume text and return them in JSON format with a "skills" key containing an array of skills.
 
     Resume Text: {resume_text}
 
-    Please provide the skills in a JSON array format.
+    Return format example:
+    {{"skills": ["Python", "SQL", "Machine Learning", ...]}}
     """
 
     response = client.chat.completions.create(
@@ -80,23 +82,42 @@ def extract_skills_from_resume(resume_text):
             {"role": "system", "content": "You are a helpful assistant that extracts skills from resumes."},
             {"role": "user", "content": prompt}
         ],
-        max_tokens=300,
+        max_tokens=500,
         temperature=0.2,
+        response_format={"type": "json_object"}
     )
 
     content = response.choices[0].message.content.strip()
     try:
-        return json.loads(content)
+        print("Raw response for skills extraction:")
+        print(content)
+        result = json.loads(content)
+        # Return the list of skills, not the whole dict
+        return result.get("skills", [])
     except json.JSONDecodeError:
-        print("Failed to parse JSON response for skills. Raw response:")
+        # Try to extract JSON from the response using regex
+        match = re.search(r"\{.*\}", content, re.DOTALL)
+        if match:
+            try:
+                result = json.loads(match.group())
+                return result.get("skills", [])
+            except json.JSONDecodeError:
+                pass
+        print("Failed to parse JSON response. Raw response:")
         print(content)
         return []
 def analyze_my_resume(resume_text, job_description):
-    # Extract skills from the resume
+    # Extract skills from the resume (returns a list)
     resume_skills = extract_skills_from_resume(resume_text)
 
     # Compare resume skills with job description requirements
-    return compare_skills(job_description, resume_skills)
+    comparison = compare_skills(job_description, resume_skills)
+
+    return {
+        "resume_skills": resume_skills,
+        "matched_skills": comparison["matched_skills"],
+        "missing_skills": comparison["missing_skills"]
+    } 
 
 # Example usage
 if __name__ == "__main__":
@@ -280,9 +301,22 @@ Member, DREAM (Data Resources for Eager & Analytical Minds)
 
 
     """
-    details = extract_job_details(job_description)
-    result = analyze_my_resume(resume_text, job_description)
-    print("Extracted Job Details:")
-    print(json.dumps(details, indent=2))
-    print("Resume Analysis Result:")
-    print(json.dumps(result, indent=2))
+    analysis_result = analyze_my_resume(resume_text, job_description)
+    print("\n" + "="*60)
+    print("RESUME ANALYSIS RESULT")
+    print("="*60)
+    print(f"\nResume Skills Found ({len(analysis_result['resume_skills'])}):")
+    for skill in analysis_result['resume_skills']:
+        print(f"  • {skill}")
+
+    print(f"\nMatched Skills ({len(analysis_result['matched_skills'])}):")
+    for skill in analysis_result['matched_skills']:
+        print(f"  ✓ {skill}")
+
+    print(f"\nMissing Skills ({len(analysis_result['missing_skills'])}):")
+    for skill in analysis_result['missing_skills']:
+        print(f"  ✗ {skill}")
+
+    print("\n" + "="*60)
+    print(f"Match Rate: {len(analysis_result['matched_skills'])}/{len(analysis_result['matched_skills']) + len(analysis_result['missing_skills'])} ({len(analysis_result['matched_skills']) / (len(analysis_result['matched_skills']) + len(analysis_result['missing_skills'])) * 100:.1f}%)")
+    print("="*60)
