@@ -1,0 +1,9 @@
+Decent reasoning, but sharpen it. Look at your data again:
+Job 1: Zero-shot and CoT both got 75%.
+Job 2: Zero-shot got 75%, CoT got 50%.
+Job 3: Both got 80%.
+Zero-shot actually outperformed CoT on Job 2 and matched it everywhere else — with fewer tokens and comparable latency.
+Better interview answer:
+"For structured extraction, I'd start with zero-shot + Pydantic structured outputs. My testing showed it matched or beat chain-of-thought on accuracy while using fewer tokens and lower latency. CoT adds value when the task requires reasoning (e.g., 'should we hire this person?'), but for pure extraction, the schema does the heavy lifting. I'd reserve CoT for tasks where the model needs to think, not just extract."
+The principle: Don't use a complex prompting strategy when a simple one works. More tokens = more cost = more latency = more things to break. Start simple, add complexity only when the data shows you need it.
+This is a strong interview talking point. Remember it.
