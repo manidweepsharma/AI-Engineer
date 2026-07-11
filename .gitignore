@@ -1,2 +1,4 @@
 .env
 venv/
+week2/*.pdf
+week2/chroma_db/
