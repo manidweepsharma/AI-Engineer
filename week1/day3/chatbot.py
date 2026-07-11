@@ -14,8 +14,9 @@ system design, LLMs, or coding."""
 def chat(user_message, history):
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     
-    for msg in history:
-        messages.append({"role": msg["role"], "content": msg["content"]})
+    for user_msg, assistant_msg in history:
+        messages.append({"role": "user", "content": user_msg})
+        messages.append({"role": "assistant", "content": assistant_msg})
     
     messages.append({"role": "user", "content": user_message})
     
