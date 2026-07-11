@@ -3,6 +3,7 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_chroma import Chroma
+import gradio as gr
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -18,8 +19,9 @@ else:
     print(f"Loaded {len(docs)} pages")
 
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500,
+        chunk_size=1000,
         chunk_overlap=50
+
     )
     chunks = splitter.split_documents(docs)
     print(f"Created {len(chunks)} chunks")
@@ -31,33 +33,35 @@ else:
     )
     print(f"Stored {vectorstore._collection.count()} chunks in Chroma")
 
-retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
+retriever = vectorstore.as_retriever(search_kwargs={"k": 6})
+llm = ChatOpenAI(model="gpt-4o-mini")
 
-query = "How does a consistent hashing work?"
-results = retriever.invoke(query)
 
-print(f"\nTop {len(results)} chunks for query: {query!r}\n")
-for i, doc in enumerate(results, 1):
-    print(f"--- Result {i} (page {doc.metadata.get('page')}) ---")
-    print(doc.page_content)
-    print()
+def answer_question(query, history):
+    results = retriever.invoke(query)
 
-context = "\n\n".join(
-    f"[page {doc.metadata.get('page')}]\n{doc.page_content}" for doc in results
-)
+    context = "\n\n".join(
+        f"[page {doc.metadata.get('page')}]\n{doc.page_content}" for doc in results
+    )
 
-prompt = f"""Answer the question using only the context below. Cite the page number(s) you used in brackets, e.g. [page 9]. If the context doesn't contain the answer, say you don't know.
+    prompt = f"""Answer the question using only the context below. Cite the page number(s) you used in brackets, e.g. [page 9]. If the context doesn't contain the answer, say you don't know.
 
 Context:
 {context}
 
 Question: {query}"""
 
-llm = ChatOpenAI(model="gpt-4o-mini")
-response = llm.invoke(prompt)
+    response = llm.invoke(prompt)
+    sources = sorted({doc.metadata.get('page') for doc in results})
 
-sources = sorted({doc.metadata.get('page') for doc in results})
+    return f"{response.content}\n\n**Sources:** pages {sources}"
 
-print("--- Answer ---")
-print(response.content)
-print(f"\nSources: pages {sources}")
+
+demo = gr.ChatInterface(
+    fn=answer_question,
+    title="System Design Interview RAG Q&A",
+    description="Ask questions about 'System Design Interview' by Alex Xu. Answers are grounded in the book with page citations.",
+)
+
+if __name__ == "__main__":
+    demo.launch()
