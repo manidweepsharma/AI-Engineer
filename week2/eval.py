@@ -5,6 +5,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_chroma import Chroma
 from langchain_core.messages import SystemMessage, HumanMessage
+import gradio as gr
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -166,3 +167,19 @@ avg_quality = sum(r[4] for r in rows) / n
 
 print("-" * 90)
 print(f"{'AVERAGE':<50} | {avg_hr:<8.2f} | {avg_rec:<8.2f} | {avg_mrr:<6.2f} | {avg_quality:.2f}/5")
+
+
+def answer_question(question):
+    retrieved_pages, answer = run_rag(question)
+    return f"{answer}\n\nSources: pages {retrieved_pages}"
+
+
+demo = gr.Interface(
+    fn=answer_question,
+    inputs=gr.Textbox(label="Ask a system design question"),
+    outputs=gr.Textbox(label="Answer"),
+    title="System Design RAG Q&A"
+)
+
+if __name__ == "__main__":
+    demo.launch()

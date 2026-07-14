@@ -1,0 +1,4 @@
+Ask a system design question,Answer,flag,username,timestamp
+what is consistent hashing,"Consistent hashing is a special kind of hashing that minimizes the number of keys that need to be remapped when a hash table is resized. Specifically, only k/n keys need to be remapped on average, where k is the number of keys and n is the number of slots. It allows for efficient data distribution and is commonly used to achieve horizontal scaling in systems by ensuring that when servers are added or removed, only a small fraction of keys are redistributed. This technique also helps to mitigate issues such as server overload due to hotspot key problems by distributing data more evenly across shards [page 74, page 84].
+
+Sources: pages [74, 84, 70, 85, 78, 73]",,,2026-07-13 21:01:19.647237
